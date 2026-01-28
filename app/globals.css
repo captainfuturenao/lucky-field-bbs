@@ -1,14 +1,9 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 body {
   background-color: #f0fdf4;
   /* Light green background (Clover field) */
   color: #334155;
-  font-family: 'Helvetica Neue', Arial, sans-serif;
-}
-
-@theme {
-  --color-lucky-green: #4ade80;
-  --color-lucky-pink: #f472b6;
-  --color-lucky-yellow: #facc15;
 }
