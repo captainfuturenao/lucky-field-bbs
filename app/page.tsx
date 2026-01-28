@@ -37,9 +37,12 @@ export default function Home() {
         const listRes = await fetch("/api/threads");
         const listData = await listRes.json();
         if (Array.isArray(listData)) setThreads(listData);
+      } else {
+        const errorData = await res.json();
+        alert(`Error: ${errorData.error || "Failed to create thread"}`);
       }
     } catch (e) {
-      alert("Error creating thread");
+      alert("Error creating thread: Network error");
     }
   };
 
