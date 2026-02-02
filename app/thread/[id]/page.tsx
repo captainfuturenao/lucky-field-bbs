@@ -175,7 +175,7 @@ export default function ThreadDetail() {
                         className="flex gap-4 group"
                     >
                         <div
-                            className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-white shadow-lg flex-shrink-0 text-xl transform rotate-3
+                            className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-white shadow-lg flex-shrink-0 text-xl
                 ${post.author_id === authorId ? "bg-slate-900" : (i % 2 === 0 ? "bg-[#4ade80]" : "bg-[#facc15]")}`}
                         >
                             {(post.name || "N").charAt(0)}

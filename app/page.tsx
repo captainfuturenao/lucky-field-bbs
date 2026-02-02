@@ -68,7 +68,7 @@ export default function Home() {
       <section className="relative h-[500px] w-full overflow-hidden">
         <BackgroundPaths title="Lucky Field BBS" />
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20">
-          <p className="text-slate-500 font-bold bg-white/50 backdrop-blur-sm px-4 py-1 rounded-full text-center">
+          <p className="text-white/80 font-bold px-4 py-1 text-center tracking-widest uppercase text-sm">
             Happy & Lucky Community🍀
           </p>
         </div>
@@ -101,8 +101,8 @@ export default function Home() {
                     key={cat}
                     onClick={() => setNewCategory(cat)}
                     className={`px-4 py-2 rounded-xl font-bold transition-all ${newCategory === cat
-                        ? "bg-[#4ade80] text-white shadow-md scale-105"
-                        : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                      ? "bg-[#4ade80] text-white shadow-md scale-105"
+                      : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                       }`}
                   >
                     {cat}
