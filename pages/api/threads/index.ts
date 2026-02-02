@@ -3,30 +3,38 @@ import sql from '@/lib/db';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method === 'GET') {
-        // テーブル作成（初回のみ・自動リカバリ）
+        // テーブル作成・カラム追加（自動リカバリ）
         try {
             await sql`
         CREATE TABLE IF NOT EXISTS threads (
           id SERIAL PRIMARY KEY,
           title TEXT NOT NULL,
           category TEXT DEFAULT '雑談',
+          author_id TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
       `;
+            // 既存テーブルへのカラム追加
+            try { await sql`ALTER TABLE threads ADD COLUMN IF NOT EXISTS author_id TEXT;`; } catch (e) { }
+            try { await sql`ALTER TABLE threads ADD COLUMN IF NOT EXISTS category TEXT DEFAULT '雑談';`; } catch (e) { }
+
             await sql`
         CREATE TABLE IF NOT EXISTS posts (
           id SERIAL PRIMARY KEY,
-          thread_id INTEGER REFERENCES threads(id),
+          thread_id INTEGER REFERENCES threads(id) ON DELETE CASCADE,
           name TEXT DEFAULT '名無しさん',
           content TEXT NOT NULL,
+          author_id TEXT,
           attachment_url TEXT,
           attachment_name TEXT,
           attachment_type TEXT,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
       `;
+            // 既存テーブルへのカラム追加
+            try { await sql`ALTER TABLE posts ADD COLUMN IF NOT EXISTS author_id TEXT;`; } catch (e) { }
         } catch (e) {
-            console.error('Table creation error:', e);
+            console.error('Table setup error:', e);
         }
 
         try {
@@ -46,20 +54,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (req.method === 'POST') {
-        const { title, category } = req.body;
+        const { title, category, author_id } = req.body;
         if (!title) return res.status(400).json({ error: 'Title required' });
 
         try {
             // スレッド作成
             const { rows: threadRows } = await sql`
-        INSERT INTO threads (title, category) VALUES (${title}, ${category || '雑談'}) RETURNING id
+        INSERT INTO threads (title, category, author_id) VALUES (${title}, ${category || '雑談'}, ${author_id || null}) RETURNING id
       `;
             const threadId = threadRows[0].id;
 
-            // 最初のレス
-            await sql`
-        INSERT INTO posts (thread_id, name, content) VALUES (${threadId}, 'Lucky Admin', 'Welcome to Lucky Field!')
-      `;
+            // 最初の固定レス（必要なら）
+            // await sql`
+            //   INSERT INTO posts (thread_id, name, content, author_id) VALUES (${threadId}, 'Lucky Admin', 'Welcome to Lucky Field!', 'admin')
+            // `;
 
             return res.status(201).json({ id: threadId });
         } catch (e) {
