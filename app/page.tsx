@@ -3,10 +3,95 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { MessageCircle, Plus, Tag } from "lucide-react";
+import { MessageCircle, Plus, Tag, GripVertical } from "lucide-react";
 import { BackgroundPaths } from "@/components/ui/background-paths";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  rectSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { restrictToWindowEdges } from "@dnd-kit/modifiers";
 
 const CATEGORIES = ["雑談", "相談", "質問", "報告", "ニュース"];
+
+function SortableThreadCard({ thread }: { thread: any }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: thread.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : "auto",
+    opacity: isDragging ? 0.8 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="h-full">
+      <Link href={`/thread/${thread.id}`}>
+        <motion.div
+          whileHover={{ y: -5, shadow: "0 20px 25px -5px rgb(0 0 0 / 0.1)" }}
+          className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 cursor-pointer transition-all h-full flex flex-col justify-between group relative"
+        >
+          {/* Drag Handle */}
+          <div
+            {...attributes}
+            {...listeners}
+            className="absolute top-8 right-4 text-slate-200 hover:text-slate-400 cursor-grab active:cursor-grabbing p-2"
+            onClick={(e) => e.preventDefault()}
+          >
+            <GripVertical size={20} />
+          </div>
+
+          <div>
+            <div className="flex justify-between items-start mb-4">
+              <span className="bg-slate-900 text-white text-[10px] uppercase tracking-widest px-3 py-1 rounded-full font-black">
+                {thread.category}
+              </span>
+              <div className="flex items-center gap-1.5 text-slate-400 group-hover:text-[#4ade80] transition-colors mr-8">
+                <MessageCircle size={18} />
+                <span className="font-black text-sm">{thread.count}</span>
+              </div>
+            </div>
+            <h3 className="text-xl font-bold text-slate-800 leading-tight group-hover:text-[#4ade80] transition-colors pr-6">
+              {thread.title}
+            </h3>
+          </div>
+          <div className="mt-8 flex justify-between items-center pt-4 border-t border-slate-50">
+            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">
+              {new Date(thread.created_at).toLocaleDateString(undefined, {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+              })}
+            </div>
+            <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-[#4ade80]/10 group-hover:text-[#4ade80] transition-all">
+              →
+            </div>
+          </div>
+        </motion.div>
+      </Link>
+    </div>
+  );
+}
 
 export default function Home() {
   const [threads, setThreads] = useState<any[]>([]);
@@ -14,6 +99,17 @@ export default function Home() {
   const [newCategory, setNewCategory] = useState("雑談");
   const [isOpen, setIsOpen] = useState(false);
   const [authorId, setAuthorId] = useState("");
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     // Author IDの取得または生成
@@ -24,17 +120,20 @@ export default function Home() {
     }
     setAuthorId(id);
 
-    fetch("/api/threads")
-      .then((res) => {
-        if (!res.ok) throw new Error("Network response was not ok");
-        return res.json();
-      })
-      .then((data) => {
-        if (Array.isArray(data)) setThreads(data);
-        else setThreads([]);
-      })
-      .catch((e) => console.error(e));
+    loadThreads();
   }, []);
+
+  const loadThreads = async () => {
+    try {
+      const res = await fetch("/api/threads");
+      if (!res.ok) throw new Error("Network response was not ok");
+      const data = await res.json();
+      if (Array.isArray(data)) setThreads(data);
+      else setThreads([]);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const createThread = async () => {
     if (!newTitle) return;
@@ -51,15 +150,38 @@ export default function Home() {
       if (res.ok) {
         setNewTitle("");
         setIsOpen(false);
-        const listRes = await fetch("/api/threads");
-        const listData = await listRes.json();
-        if (Array.isArray(listData)) setThreads(listData);
+        loadThreads();
       } else {
         const errorData = await res.json();
         alert(`Error: ${errorData.error || "Failed to create thread"}`);
       }
     } catch (e) {
       alert("Error creating thread: Network error");
+    }
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = threads.findIndex((t) => t.id === active.id);
+      const newIndex = threads.findIndex((t) => t.id === over.id);
+
+      const newThreads = arrayMove(threads, oldIndex, newIndex);
+      setThreads(newThreads);
+
+      // サーバーに保存
+      try {
+        await fetch("/api/threads", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            threadIds: newThreads.map((t) => t.id),
+          }),
+        });
+      } catch (e) {
+        console.error("Failed to save order", e);
+      }
     }
   };
 
@@ -131,37 +253,23 @@ export default function Home() {
           </motion.div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {threads.map((thread) => (
-            <Link href={`/thread/${thread.id}`} key={thread.id}>
-              <motion.div
-                whileHover={{ y: -5, shadow: "0 20px 25px -5px rgb(0 0 0 / 0.1)" }}
-                className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 cursor-pointer transition-all h-full flex flex-col justify-between group"
-              >
-                <div>
-                  <div className="flex justify-between items-start mb-4">
-                    <span className="bg-slate-900 text-white text-[10px] uppercase tracking-widest px-3 py-1 rounded-full font-black">
-                      {thread.category}
-                    </span>
-                    <div className="flex items-center gap-1.5 text-slate-400 group-hover:text-[#4ade80] transition-colors">
-                      <MessageCircle size={18} />
-                      <span className="font-black text-sm">{thread.count}</span>
-                    </div>
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-800 leading-tight group-hover:text-[#4ade80] transition-colors">{thread.title}</h3>
-                </div>
-                <div className="mt-8 flex justify-between items-center pt-4 border-t border-slate-50">
-                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">
-                    {new Date(thread.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
-                  </div>
-                  <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-[#4ade80]/10 group-hover:text-[#4ade80] transition-all">
-                    →
-                  </div>
-                </div>
-              </motion.div>
-            </Link>
-          ))}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+          modifiers={[restrictToWindowEdges]}
+        >
+          <SortableContext
+            items={threads.map((t) => t.id)}
+            strategy={rectSortingStrategy}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {threads.map((thread) => (
+                <SortableThreadCard key={thread.id} thread={thread} />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       </div>
     </div>
   );
